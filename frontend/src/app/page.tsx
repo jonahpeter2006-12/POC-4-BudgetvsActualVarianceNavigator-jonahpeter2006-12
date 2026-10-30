@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import React, { useEffect, useState } from "react";
-import { DollarSign, TrendingUp, TrendingDown, AlertCircle, PieChart, Layers } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, AlertCircle, Layers } from "lucide-react";
 
 interface SummaryData {
   total_budget: number;
