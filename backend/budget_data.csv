@@ -1,0 +1,19 @@
+﻿cost_centre,department,account_category,month,budget_amount,actual_amount,committed_amount,forecast_amount
+CC-101,Engineering,Cloud Infrastructure,Jan 2026,45000,48000,2000,50000
+CC-101,Engineering,Cloud Infrastructure,Feb 2026,45000,49500,1500,51000
+CC-101,Engineering,Cloud Infrastructure,Mar 2026,45000,52000,3000,53500
+CC-102,Engineering,Software Licenses,Jan 2026,20000,18500,1000,19000
+CC-102,Engineering,Software Licenses,Feb 2026,20000,19000,1000,19500
+CC-102,Engineering,Software Licenses,Mar 2026,20000,21000,500,21500
+CC-201,Marketing,Paid Ads & Campaigns,Jan 2026,60000,68000,5000,70000
+CC-201,Marketing,Paid Ads & Campaigns,Feb 2026,60000,58000,4000,62000
+CC-201,Marketing,Paid Ads & Campaigns,Mar 2026,65000,72000,8000,75000
+CC-202,Marketing,Events & PR,Jan 2026,30000,25000,2000,28000
+CC-202,Marketing,Events & PR,Feb 2026,30000,34000,1000,35000
+CC-202,Marketing,Events & PR,Mar 2026,35000,31000,3000,34000
+CC-301,Sales,Travel & Client Entertainment,Jan 2026,25000,29000,1500,30000
+CC-301,Sales,Travel & Client Entertainment,Feb 2026,25000,27500,2000,28000
+CC-301,Sales,Travel & Client Entertainment,Mar 2026,28000,32000,2500,33000
+CC-401,HR & Ops,Recruitment & Onboarding,Jan 2026,15000,12000,500,13000
+CC-401,HR & Ops,Recruitment & Onboarding,Feb 2026,15000,14500,1000,15000
+CC-401,HR & Ops,Recruitment & Onboarding,Mar 2026,18000,22000,3000,23000
