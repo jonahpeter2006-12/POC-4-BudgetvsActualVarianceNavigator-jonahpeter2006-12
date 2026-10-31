@@ -131,6 +131,8 @@ export default function DashboardPage() {
   const [forecast, setForecast] = useState<Row[]>([]);
   const [waterfallInfo, setWaterfallInfo] = useState<Row | null>(null);
 
+  const [availableMonths, setAvailableMonths] = useState<string[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -140,6 +142,7 @@ export default function DashboardPage() {
   const [selectedMonth, setSelectedMonth] =
     useState('All Months');
 
+  // Load dashboard data whenever the department or month changes.
   useEffect(() => {
     let cancelled = false;
 
@@ -148,33 +151,40 @@ export default function DashboardPage() {
       setError('');
 
       try {
-        const endpoints = [
-          'summary',
-          'department-breakdown',
-          'monthly-trends',
-          'department-heatmap',
-          'forecast',
-          'waterfall',
+        const params = new URLSearchParams();
+
+        if (selectedDepartment !== 'All Departments') {
+          params.set('department', selectedDepartment);
+        }
+
+        if (selectedMonth !== 'All Months') {
+          params.set('month', selectedMonth);
+        }
+
+        const query = params.toString();
+        const filterQuery = query ? `?${query}` : '';
+
+        const requests = [
+          fetch(`${API_URL}/api/summary`, { cache: 'no-store' }),
+          fetch(`${API_URL}/api/department-breakdown`, { cache: 'no-store' }),
+          fetch(`${API_URL}/api/monthly-trends${filterQuery}`, { cache: 'no-store' }),
+          fetch(`${API_URL}/api/department-heatmap`, { cache: 'no-store' }),
+          fetch(`${API_URL}/api/forecast${filterQuery}`, { cache: 'no-store' }),
+          fetch(`${API_URL}/api/waterfall`, { cache: 'no-store' }),
+
+          // Keep the complete month list available for the filter.
+          fetch(`${API_URL}/api/monthly-trends`, { cache: 'no-store' }),
         ];
 
-        const responses = await Promise.all(
-          endpoints.map(async (endpoint) => {
-            const response = await fetch(
-              `${API_URL}/api/${endpoint}`,
-              { cache: 'no-store' }
+        const responses = await Promise.all(requests);
+
+        for (const response of responses) {
+          if (!response.ok) {
+            throw new Error(
+              `Backend request failed (${response.status})`
             );
-
-            if (!response.ok) {
-              throw new Error(
-                `${endpoint} request failed (${response.status})`
-              );
-            }
-
-            return response.json();
-          })
-        );
-
-        if (cancelled) return;
+          }
+        }
 
         const [
           summaryData,
@@ -183,7 +193,12 @@ export default function DashboardPage() {
           heatmapData,
           forecastData,
           waterfallData,
-        ] = responses;
+          allMonthlyData,
+        ] = await Promise.all(
+          responses.map((response) => response.json())
+        );
+
+        if (cancelled) return;
 
         setSummary(summaryData);
 
@@ -205,6 +220,26 @@ export default function DashboardPage() {
             'results'
           )
         );
+
+        const allMonthRows = rowsFrom(
+          allMonthlyData,
+          'monthly_trends',
+          'trends',
+          'data',
+          'results'
+        );
+
+        const monthOptions = Array.from(
+          new Set(
+            allMonthRows
+              .map((row) =>
+                String(field(row, 'month', 'period') || '')
+              )
+              .filter(Boolean)
+          )
+        );
+
+        setAvailableMonths(monthOptions);
 
         setHeatmap(
           rowsFrom(
@@ -236,7 +271,9 @@ export default function DashboardPage() {
           );
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
@@ -245,7 +282,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedDepartment, selectedMonth]);
 
   // Close dialogs with Escape.
   useEffect(() => {
@@ -297,15 +334,7 @@ export default function DashboardPage() {
     );
   }, [departments]);
 
-  const monthsList = useMemo(() => {
-    return Array.from(
-      new Set(
-        monthly
-          .map((row) => String(field(row, 'month', 'period') || ''))
-          .filter(Boolean)
-      )
-    );
-  }, [monthly]);
+  const monthsList = availableMonths;
 
   const filteredDepartments = useMemo(() => {
     return selectedDepartment === 'All Departments'

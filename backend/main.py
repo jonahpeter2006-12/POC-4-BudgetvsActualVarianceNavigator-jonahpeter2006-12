@@ -271,8 +271,18 @@ def get_department_breakdown():
 
 
 @app.get("/api/monthly-trends")
-def get_monthly_trends():
+def get_monthly_trends(
+    department: str | None = Query(default=None),
+    month: str | None = Query(default=None),
+):
+    """Return monthly financial trends with optional filters."""
     df = load_data()
+
+    if department:
+        df = df[df["department"] == department]
+
+    if month:
+        df = df[df["month"] == month]
 
     with duckdb.connect() as con:
         result = con.execute(
@@ -337,7 +347,9 @@ def get_department_heatmap():
 
 @app.get("/api/forecast")
 def get_forecast(
-    range_pct: float = Query(default=10.0, ge=0, le=50)
+    range_pct: float = Query(default=10.0, ge=0, le=50),
+    department: str | None = Query(default=None),
+    month: str | None = Query(default=None),
 ):
     """
     Return an illustrative forecast range.
@@ -347,6 +359,12 @@ def get_forecast(
     contain historical forecast-error observations.
     """
     df = load_data()
+
+    if department:
+        df = df[df["department"] == department]
+
+    if month:
+        df = df[df["month"] == month]
 
     with duckdb.connect() as con:
         result = con.execute(
