@@ -14,7 +14,6 @@ app = FastAPI(
     description="Financial performance and budget variance analytics API",
 )
 
-# Development frontend origins
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -44,6 +43,13 @@ AMOUNT_COLUMNS = [
     "actual_amount",
     "committed_amount",
     "forecast_amount",
+]
+
+GROUPING_COLUMNS = [
+    "department",
+    "month",
+    "cost_centre",
+    "account_category",
 ]
 
 
@@ -90,14 +96,7 @@ def load_data() -> pd.DataFrame:
             detail="Dataset contains negative financial amounts.",
         )
 
-    grouping_columns = [
-        "department",
-        "month",
-        "cost_centre",
-        "account_category",
-    ]
-
-    if df[grouping_columns].isna().any().any():
+    if df[GROUPING_COLUMNS].isna().any().any():
         raise HTTPException(
             status_code=500,
             detail="Dataset contains missing grouping information.",
@@ -122,6 +121,67 @@ def money(value: Any) -> float:
     return round(float(value), 2)
 
 
+def apply_filters(
+    df: pd.DataFrame,
+    department: str | None = None,
+    month: str | None = None,
+) -> pd.DataFrame:
+    """Validate and apply the shared dashboard filters."""
+
+    if department:
+        available_departments = df["department"].unique().tolist()
+
+        if department not in available_departments:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "message": "Unknown department filter.",
+                    "available_departments": sorted(available_departments),
+                },
+            )
+
+        df = df[df["department"] == department]
+
+    if month:
+        available_months = df["month"].unique().tolist()
+
+        if month not in available_months:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "message": "Unknown month filter.",
+                    "available_months": sorted(
+                        available_months,
+                        key=get_month_date,
+                    ),
+                },
+            )
+
+        df = df[df["month"] == month]
+
+    return df
+
+
+def sort_monthly_results(result: list[dict]) -> list[dict]:
+    """Sort monthly results chronologically."""
+    return sorted(
+        result,
+        key=lambda row: get_month_date(row["month"]),
+    )
+
+
+def round_result_fields(
+    rows: list[dict],
+    fields: list[str],
+) -> list[dict]:
+    """Round selected numeric fields in grouped API results."""
+    for row in rows:
+        for field in fields:
+            row[field] = money(row[field])
+
+    return rows
+
+
 @app.get("/api/health")
 def health_check():
     return {
@@ -132,8 +192,11 @@ def health_check():
 
 
 @app.get("/api/summary")
-def get_summary():
-    df = load_data()
+def get_summary(
+    department: str | None = Query(default=None),
+    month: str | None = Query(default=None),
+):
+    df = apply_filters(load_data(), department, month)
 
     total_budget = df["budget_amount"].sum()
     total_actual = df["actual_amount"].sum()
@@ -168,8 +231,11 @@ def get_summary():
 
 
 @app.get("/api/waterfall")
-def get_waterfall():
-    df = load_data()
+def get_waterfall(
+    department: str | None = Query(default=None),
+    month: str | None = Query(default=None),
+):
+    df = apply_filters(load_data(), department, month)
 
     total_budget = df["budget_amount"].sum()
     total_actual = df["actual_amount"].sum()
@@ -229,8 +295,11 @@ def get_waterfall():
 
 
 @app.get("/api/department-breakdown")
-def get_department_breakdown():
-    df = load_data()
+def get_department_breakdown(
+    department: str | None = Query(default=None),
+    month: str | None = Query(default=None),
+):
+    df = apply_filters(load_data(), department, month)
 
     with duckdb.connect() as con:
         result = con.execute(
@@ -256,16 +325,17 @@ def get_department_breakdown():
             """
         ).df().to_dict(orient="records")
 
-    for row in result:
-        for key in [
+    round_result_fields(
+        result,
+        [
             "budget",
             "actual",
             "committed",
             "forecast",
             "variance",
             "variance_pct",
-        ]:
-            row[key] = money(row[key])
+        ],
+    )
 
     return {"departments": result}
 
@@ -275,14 +345,8 @@ def get_monthly_trends(
     department: str | None = Query(default=None),
     month: str | None = Query(default=None),
 ):
-    """Return monthly financial trends with optional filters."""
-    df = load_data()
-
-    if department:
-        df = df[df["department"] == department]
-
-    if month:
-        df = df[df["month"] == month]
+    """Return monthly financial trends with shared filters."""
+    df = apply_filters(load_data(), department, month)
 
     with duckdb.connect() as con:
         result = con.execute(
@@ -297,18 +361,22 @@ def get_monthly_trends(
             """
         ).df().to_dict(orient="records")
 
-    result.sort(key=lambda row: get_month_date(row["month"]))
+    result = sort_monthly_results(result)
 
-    for row in result:
-        for key in ["budget", "actual", "forecast"]:
-            row[key] = money(row[key])
+    round_result_fields(
+        result,
+        ["budget", "actual", "forecast"],
+    )
 
     return {"trends": result}
 
 
 @app.get("/api/department-heatmap")
-def get_department_heatmap():
-    df = load_data()
+def get_department_heatmap(
+    department: str | None = Query(default=None),
+    month: str | None = Query(default=None),
+):
+    df = apply_filters(load_data(), department, month)
 
     with duckdb.connect() as con:
         result = con.execute(
@@ -333,14 +401,10 @@ def get_department_heatmap():
             """
         ).df().to_dict(orient="records")
 
-    for row in result:
-        for key in [
-            "budget",
-            "actual",
-            "variance",
-            "variance_pct",
-        ]:
-            row[key] = money(row[key])
+    round_result_fields(
+        result,
+        ["budget", "actual", "variance", "variance_pct"],
+    )
 
     return {"heatmap": result}
 
@@ -358,13 +422,7 @@ def get_forecast(
     validated confidence interval. The current dataset does not
     contain historical forecast-error observations.
     """
-    df = load_data()
-
-    if department:
-        df = df[df["department"] == department]
-
-    if month:
-        df = df[df["month"] == month]
+    df = apply_filters(load_data(), department, month)
 
     with duckdb.connect() as con:
         result = con.execute(
@@ -379,7 +437,7 @@ def get_forecast(
             """
         ).df().to_dict(orient="records")
 
-    result.sort(key=lambda row: get_month_date(row["month"]))
+    result = sort_monthly_results(result)
 
     forecast_items = []
 
